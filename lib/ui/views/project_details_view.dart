@@ -27,45 +27,36 @@ class ProjectDetailsView extends ConsumerWidget {
               children: [
                 _SectionCard(
                   title: 'Informations Générales',
-                  child: Column(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: _buildCompanySection(context, ref)),
-                          const SizedBox(width: 24),
-                          Expanded(child: _buildStatusSection(context, ref)),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: _buildClientSection(context, ref)),
-                          const SizedBox(width: 24),
-                          Expanded(
-                            child: Column(
-                              children: [
-                                _buildTextFormField(
-                                  label: 'Référence Bon de Commande',
-                                  initialValue: project.referenceBonCommande ?? '',
-                                  onChanged: (value) => ref.read(projectProvider.notifier).updateProject(referenceBonCommande: value),
-                                  readOnly: !isAccepted,
-                                  hint: isAccepted ? 'Entrez la référence...' : 'N/A',
-                                ),
-                                const SizedBox(height: 24),
-                                _buildDatePickerField(
-                                  context: context,
-                                  label: 'Date de confirmation',
-                                  selectedDate: project.dateAcceptation,
-                                  onDateSelected: (date) => ref.read(projectProvider.notifier).updateProject(dateAcceptation: date),
-                                  enabled: isAccepted,
-                                ),
-                              ],
+                      Expanded(
+                        child: Column(
+                          children: [
+                            _buildCompanySection(context, ref),
+                            const SizedBox(height: 24),
+                            _buildStatusSection(context, ref),
+                            const SizedBox(height: 24),
+                            _buildTextFormField(
+                              label: 'Référence Bon de Commande',
+                              initialValue: project.referenceBonCommande ?? '',
+                              onChanged: (value) => ref.read(projectProvider.notifier).updateProject(referenceBonCommande: value),
+                              readOnly: !isAccepted,
+                              hint: isAccepted ? 'Entrez la référence...' : 'N/A',
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 24),
+                            _buildDatePickerField(
+                              context: context,
+                              label: 'Date de confirmation',
+                              selectedDate: project.dateAcceptation,
+                              onDateSelected: (date) => ref.read(projectProvider.notifier).updateProject(dateAcceptation: date),
+                              enabled: isAccepted,
+                            ),
+                          ],
+                        ),
                       ),
+                      const SizedBox(width: 24),
+                      Expanded(child: _buildClientSection(context, ref)),
                     ],
                   ),
                 ),
