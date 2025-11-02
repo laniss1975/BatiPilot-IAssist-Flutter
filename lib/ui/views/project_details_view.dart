@@ -113,6 +113,33 @@ class ProjectDetailsView extends ConsumerWidget {
                     ],
                   ),
                 ),
+                const SizedBox(height: 24),
+                _SectionCard(
+                  title: 'Informations Chantier',
+                  child: Column(
+                    children: [
+                      _buildTextFormField(
+                        label: 'Adresse du chantier',
+                        initialValue: project.metadata.adresseChantier,
+                        onChanged: (value) => ref.read(projectProvider.notifier).updateMetadata(adresseChantier: value),
+                        maxLines: 4,
+                      ),
+                      const SizedBox(height: 24),
+                      _buildTextFormField(
+                        label: 'Occupant',
+                        initialValue: project.metadata.occupant,
+                        onChanged: (value) => ref.read(projectProvider.notifier).updateMetadata(occupant: value),
+                      ),
+                      const SizedBox(height: 24),
+                      _buildTextFormField(
+                        label: 'Informations complémentaires',
+                        initialValue: project.metadata.infoComplementaire,
+                        onChanged: (value) => ref.read(projectProvider.notifier).updateMetadata(infoComplementaire: value),
+                        maxLines: 4,
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           );
