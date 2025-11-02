@@ -79,6 +79,7 @@ class ProjectDetailsView extends ConsumerWidget {
                         children: [
                           Expanded(
                             child: _buildTextFormField(
+                              key: ValueKey('devis_number_${project.devisNumber}'),
                               label: 'Numéro du devis',
                               initialValue: project.devisNumber,
                               onChanged: (value) => ref.read(projectProvider.notifier).updateProject(devisNumber: value),
@@ -362,13 +363,14 @@ class ProjectDetailsView extends ConsumerWidget {
     );
   }
   
-  Widget _buildTextFormField({required String label, required String initialValue, ValueChanged<String>? onChanged, String? hint, bool readOnly = false, int maxLines = 1, Widget? suffixIcon}) {
+  Widget _buildTextFormField({Key? key, required String label, required String initialValue, ValueChanged<String>? onChanged, String? hint, bool readOnly = false, int maxLines = 1, Widget? suffixIcon}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: TextStyle(fontWeight: FontWeight.bold, color: readOnly ? Colors.grey : Colors.black)),
         const SizedBox(height: 8),
         TextFormField(
+          key: key,
           initialValue: initialValue,
           onChanged: onChanged,
           readOnly: readOnly,
