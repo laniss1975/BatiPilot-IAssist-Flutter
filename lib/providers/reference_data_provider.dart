@@ -3,6 +3,7 @@ import 'package:test1/models/ai_model_model.dart';
 import 'package:test1/models/ai_provider_model.dart';
 import 'package:test1/models/company_model.dart';
 import 'package:test1/models/client_model.dart';
+import 'package:test1/models/client_type_model.dart';
 import 'package:test1/providers/auth_provider.dart';
 import 'package:test1/providers/supabase_connection_provider.dart';
 
@@ -94,6 +95,15 @@ class ClientsNotifier extends AsyncNotifier<List<Client>> {
 }
 final clientsProvider = AsyncNotifierProvider<ClientsNotifier, List<Client>>(ClientsNotifier.new);
 
+// --- Gestion des Types de Clients ---
+final clientTypesProvider = FutureProvider<List<ClientType>>((ref) async {
+  final supabaseClient = ref.watch(supabaseConnectionProvider).client;
+  final authState = ref.watch(authStateProvider);
+  if (supabaseClient == null || authState.value?.session?.user == null) return [];
+
+  final response = await supabaseClient.from('client_types').select();
+  return response.map((item) => ClientType.fromJson(item)).toList();
+});
 
 // --- Données de Référence pour l'IA ---
 

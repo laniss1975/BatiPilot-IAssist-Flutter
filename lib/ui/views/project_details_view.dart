@@ -229,7 +229,7 @@ class ProjectDetailsView extends ConsumerWidget {
                 ),
                 if (project.clientId != null && selectedClient.id.isNotEmpty) ...[
                   const SizedBox(height: 8),
-                  _buildInfoCard(context, selectedClient),
+                  _buildClientInfoCard(context, ref, selectedClient),
                   const SizedBox(height: 8),
                   ElevatedButton.icon(
                     onPressed: ref.read(projectProvider.notifier).addClientToList,
@@ -372,6 +372,59 @@ class ProjectDetailsView extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  if (details.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    ...details.map((line) => Text(line, style: Theme.of(context).textTheme.bodySmall)),
+                  ]
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClientInfoCard(BuildContext context, WidgetRef ref, Client client) {
+    final clientTypesAsync = ref.watch(clientTypesProvider);
+
+    List<String> details = [];
+
+    // Ajouter le type de client en premier
+    clientTypesAsync.whenData((types) {
+      if (client.clientTypeId != null) {
+        final type = types.firstWhere(
+          (ct) => ct.id == client.clientTypeId,
+          orElse: () => types.first, // Fallback
+        );
+        details.add('Type: ${type.name}');
+      }
+    });
+
+    // Ajouter l'adresse
+    final addressParts = [client.adresse, client.codePostal, client.ville].where((s) => s != null && s.isNotEmpty).join(', ');
+    if (addressParts.isNotEmpty) details.add(addressParts);
+
+    // Ajouter téléphone et email
+    if (client.tel1 != null && client.tel1!.isNotEmpty) details.add('Tél: ${client.tel1}');
+    if (client.email != null && client.email!.isNotEmpty) details.add('Email: ${client.email}');
+
+    return Card(
+      elevation: 0,
+      color: Colors.blueGrey[50],
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: Colors.blueGrey[100]!)),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(padding: const EdgeInsets.only(top: 2.0), child: const Icon(Icons.person, color: Colors.blueGrey, size: 18)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(client.fullName, style: const TextStyle(fontWeight: FontWeight.bold)),
                   if (details.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     ...details.map((line) => Text(line, style: Theme.of(context).textTheme.bodySmall)),

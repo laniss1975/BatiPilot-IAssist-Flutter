@@ -193,10 +193,25 @@ class ProjectNotifier extends StateNotifier<Project> {
       );
 
       // Formater le client au format attendu
-      // Ligne 1: Type de client (pour l'instant "Particulier" par défaut, à améliorer)
+      // Ligne 1: Type de client
       // Ligne 2: Nom complet du client
       // Ligne 3: Adresse complète
-      final clientType = 'Particulier'; // TODO: récupérer depuis client_types via clientTypeId
+
+      // Récupérer le type de client
+      String clientType = 'Type non défini';
+      if (client.clientTypeId != null) {
+        try {
+          final clientTypes = await _ref.read(clientTypesProvider.future);
+          final type = clientTypes.firstWhere(
+            (ct) => ct.id == client.clientTypeId,
+            orElse: () => throw Exception('Type non trouvé'),
+          );
+          clientType = type.name;
+        } catch (e) {
+          print('Erreur lors de la récupération du type de client: $e');
+          // Garder "Type non défini"
+        }
+      }
 
       final addressParts = [
         client.adresse,
