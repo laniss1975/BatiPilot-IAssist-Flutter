@@ -99,10 +99,11 @@ class ProjectDetailsView extends ConsumerWidget {
                       ),
                       const SizedBox(height: 24),
                       _buildTextFormField(
+                        key: ValueKey('project_name_${project.projectName}'),
                         label: 'Nom du projet',
                         initialValue: project.projectName,
                         onChanged: (value) => ref.read(projectProvider.notifier).updateProject(projectName: value),
-                        suffixIcon: IconButton(icon: const Icon(Icons.edit_note), tooltip: 'Générer le nom', onPressed: () {}),
+                        suffixIcon: IconButton(icon: const Icon(Icons.edit_note), tooltip: 'Générer le nom', onPressed: ref.read(projectProvider.notifier).generateProjectName),
                       ),
                       const SizedBox(height: 24),
                       _buildTextFormField(
@@ -229,7 +230,28 @@ class ProjectDetailsView extends ConsumerWidget {
                 if (project.clientId != null && selectedClient.id.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   _buildInfoCard(context, selectedClient),
-                ]
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: ref.read(projectProvider.notifier).addClientToList,
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Ajouter à la liste'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueGrey[700],
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                const Text('Liste des Clients', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                _buildTextFormField(
+                  key: ValueKey('clients_data_${project.metadata.clientsData.length}'),
+                  label: '',
+                  initialValue: project.metadata.clientsData,
+                  onChanged: (value) => ref.read(projectProvider.notifier).updateMetadata(clientsData: value),
+                  maxLines: 6,
+                  hint: 'Les clients ajoutés apparaîtront ici...',
+                ),
               ],
             );
           },

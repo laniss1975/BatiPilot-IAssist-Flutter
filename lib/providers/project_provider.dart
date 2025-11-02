@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:test1/models/project_model.dart';
 import 'package:test1/providers/user_settings_provider.dart';
+import 'package:test1/providers/reference_data_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; // Import Supabase
 import 'package:test1/providers/supabase_connection_provider.dart'; // Import du provider de connexion Supabase
@@ -120,6 +121,102 @@ class ProjectNotifier extends StateNotifier<Project> {
     } catch (e) {
       print('Erreur lors de la génération du numéro de devis : $e');
       // Gérer l'erreur (ex: afficher un message à l'utilisateur)
+    }
+  }
+
+  Future<void> generateProjectName() async {
+    try {
+      // 1. Générer le numéro de devis si besoin
+      if (state.devisNumber.isEmpty) {
+        await generateDevisNumber();
+      }
+
+      // 2. Récupérer le NOM du client (priorité: clientsData 2ème ligne)
+      String clientName = 'Client à définir';
+
+      if (state.metadata.clientsData.isNotEmpty) {
+        // Extraire la 2ème ligne de clientsData
+        final lines = state.metadata.clientsData
+            .split('\n')
+            .where((l) => l.trim().isNotEmpty)
+            .toList();
+        if (lines.length >= 2) {
+          clientName = lines[1].trim(); // 2ème ligne = nom du 1er client
+        }
+      }
+      // Fallback: utiliser clientId si pas de clientsData
+      else if (state.clientId != null) {
+        try {
+          final clients = await _ref.read(clientsProvider.future);
+          final client = clients.firstWhere(
+            (c) => c.id == state.clientId,
+            orElse: () => throw Exception('Client non trouvé'),
+          );
+          clientName = client.fullName;
+        } catch (e) {
+          print('Erreur lors de la récupération du client: $e');
+          // Garder "Client à définir"
+        }
+      }
+
+      // 3. Extraire la description (1ère ligne)
+      String description = '';
+      if (state.metadata.descriptionProjet.isNotEmpty) {
+        description = state.metadata.descriptionProjet.split('\n').first.trim();
+      }
+
+      // 4. Assembler le nom du projet
+      final generatedName = 'Devis n° ${state.devisNumber} - $clientName${description.isNotEmpty ? ' - $description' : ''}';
+
+      // 5. Mettre à jour l'état
+      state = state.copyWith(projectName: generatedName, updatedAt: DateTime.now());
+
+      print('Nom du projet généré : $generatedName');
+    } catch (e) {
+      print('Erreur lors de la génération du nom du projet : $e');
+    }
+  }
+
+  Future<void> addClientToList() async {
+    // Vérifier qu'un client est sélectionné
+    if (state.clientId == null) {
+      print('Aucun client sélectionné');
+      return;
+    }
+
+    try {
+      // Récupérer le client depuis le provider
+      final clients = await _ref.read(clientsProvider.future);
+      final client = clients.firstWhere(
+        (c) => c.id == state.clientId,
+        orElse: () => throw Exception('Client non trouvé'),
+      );
+
+      // Formater le client au format attendu
+      // Ligne 1: Type de client (pour l'instant "Particulier" par défaut, à améliorer)
+      // Ligne 2: Nom complet du client
+      // Ligne 3: Adresse complète
+      final clientType = 'Particulier'; // TODO: récupérer depuis client_types via clientTypeId
+
+      final addressParts = [
+        client.adresse,
+        '${client.codePostal ?? ''} ${client.ville ?? ''}'.trim()
+      ].where((s) => s != null && s.isNotEmpty).join(' - ');
+
+      final formattedClient = '$clientType\n${client.fullName}\n${addressParts.isNotEmpty ? addressParts : 'Adresse non renseignée'}\n\n';
+
+      // Ajouter au clientsData existant
+      final updatedClientsData = state.metadata.clientsData + formattedClient;
+
+      // Mettre à jour l'état
+      state = state.copyWith(
+        metadata: state.metadata.copyWith(clientsData: updatedClientsData),
+        updatedAt: DateTime.now(),
+      );
+
+      print('Client ajouté à la liste : ${client.fullName}');
+    } catch (e) {
+      print('Erreur lors de l\'ajout du client à la liste : $e');
     }
   }
 }
