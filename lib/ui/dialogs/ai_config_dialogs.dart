@@ -511,8 +511,8 @@ class _ApiKeySelector extends ConsumerWidget {
             labelText: 'Clé API à utiliser *',
             prefixIcon: Icon(Icons.vpn_key),
           ),
-          items: keys.map((k) => DropdownMenuItem(
-            value: k['id'],
+          items: keys.map((k) => DropdownMenuItem<String>(
+            value: k['id'] as String,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
