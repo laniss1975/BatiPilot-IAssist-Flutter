@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:test1/ui/theme/app_theme.dart';
 import 'package:test1/providers/supabase_connection_provider.dart';
 import 'package:test1/ui/dialogs/ai_config_dialogs.dart';
+import 'package:test1/providers/ai_prompts_provider.dart';
+import 'package:test1/models/ai_prompt_model.dart';
 
 // Modèles de données
 class ApiKey {
@@ -97,7 +99,7 @@ class _AiControlCenterViewState extends ConsumerState<AiControlCenterView> with 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -159,6 +161,7 @@ class _AiControlCenterViewState extends ConsumerState<AiControlCenterView> with 
             tabs: const [
               Tab(icon: Icon(Icons.key), text: 'Mes Clés API'),
               Tab(icon: Icon(Icons.settings), text: 'Configurations'),
+              Tab(icon: Icon(Icons.edit_note), text: 'Prompts Assistant'),
             ],
           ),
         ),
@@ -170,6 +173,7 @@ class _AiControlCenterViewState extends ConsumerState<AiControlCenterView> with 
             children: const [
               _ApiKeysTab(),
               _ConfigurationsTab(),
+              _PromptsTab(),
             ],
           ),
         ),
@@ -579,4 +583,470 @@ Future<void> _deleteConfig(BuildContext context, WidgetRef ref, String id) async
 
 Future<void> _activateConfig(WidgetRef ref, String id) async {
   // TODO: Implémenter l'activation
+}
+
+// ========== Onglet Prompts Assistant ==========
+class _PromptsTab extends ConsumerStatefulWidget {
+  const _PromptsTab();
+
+  @override
+  ConsumerState<_PromptsTab> createState() => _PromptsTabState();
+}
+
+class _PromptsTabState extends ConsumerState<_PromptsTab> {
+  String? _selectedPromptId;
+  final _titleController = TextEditingController();
+  final _keyController = TextEditingController();
+  final _contentController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  bool _isEditing = false;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _keyController.dispose();
+    _contentController.dispose();
+    super.dispose();
+  }
+
+  void _loadPrompt(AiPrompt prompt) {
+    setState(() {
+      _selectedPromptId = prompt.id;
+      _titleController.text = prompt.title;
+      _keyController.text = prompt.key;
+      _contentController.text = prompt.content;
+      _isEditing = false;
+    });
+  }
+
+  void _clearForm() {
+    setState(() {
+      _selectedPromptId = null;
+      _titleController.clear();
+      _keyController.clear();
+      _contentController.clear();
+      _isEditing = true;
+    });
+  }
+
+  Future<void> _savePrompt() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    try {
+      if (_selectedPromptId == null) {
+        // Créer un nouveau prompt
+        await ref.read(aiPromptsProvider.notifier).createPrompt(
+              key: _keyController.text.trim(),
+              title: _titleController.text.trim(),
+              content: _contentController.text.trim(),
+            );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Prompt créé avec succès !'),
+                backgroundColor: Colors.green),
+          );
+        }
+      } else {
+        // Mettre à jour le prompt existant
+        await ref.read(aiPromptsProvider.notifier).updatePrompt(
+              id: _selectedPromptId!,
+              key: _keyController.text.trim(),
+              title: _titleController.text.trim(),
+              content: _contentController.text.trim(),
+            );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Prompt mis à jour avec succès !'),
+                backgroundColor: Colors.green),
+          );
+        }
+      }
+
+      setState(() => _isEditing = false);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _deletePrompt() async {
+    if (_selectedPromptId == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Supprimer le prompt'),
+        content: Text(
+            'Voulez-vous vraiment supprimer "${_titleController.text}" ?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await ref.read(aiPromptsProvider.notifier).deletePrompt(_selectedPromptId!);
+        _clearForm();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Prompt supprimé'), backgroundColor: Colors.orange),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final promptsAsync = ref.watch(aiPromptsProvider);
+
+    return Container(
+      color: AppTheme.backgroundColor,
+      padding: const EdgeInsets.all(24),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Liste des prompts (gauche)
+          SizedBox(
+            width: 300,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Prompts',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                    ),
+                    IconButton(
+                      onPressed: _clearForm,
+                      icon: const Icon(Icons.add_circle_outline),
+                      tooltip: 'Nouveau prompt',
+                      color: AppTheme.primaryColor,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: promptsAsync.when(
+                    data: (prompts) {
+                      if (prompts.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.edit_note_outlined,
+                                  size: 48, color: Colors.grey[400]),
+                              const SizedBox(height: 16),
+                              Text('Aucun prompt',
+                                  style: TextStyle(color: Colors.grey[600])),
+                              const SizedBox(height: 8),
+                              TextButton.icon(
+                                onPressed: () async {
+                                  try {
+                                    await ref
+                                        .read(aiPromptsProvider.notifier)
+                                        .initializeDefaultPrompts();
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                              'Prompts par défaut créés !'),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Erreur: $e'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                                icon: const Icon(Icons.download),
+                                label: const Text('Initialiser les prompts'),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
+                      return ListView.builder(
+                        itemCount: prompts.length,
+                        itemBuilder: (context, index) {
+                          final prompt = prompts[index];
+                          final isSelected = prompt.id == _selectedPromptId;
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? AppTheme.primaryColor.withOpacity(0.1)
+                                  : AppTheme.surfaceColor,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected
+                                    ? AppTheme.primaryColor
+                                    : AppTheme.messageBorder,
+                                width: isSelected ? 2 : 1,
+                              ),
+                            ),
+                            child: ListTile(
+                              onTap: () => _loadPrompt(prompt),
+                              leading: Icon(
+                                Icons.edit_note,
+                                color: isSelected
+                                    ? AppTheme.primaryColor
+                                    : Colors.grey[600],
+                              ),
+                              title: Text(
+                                prompt.title,
+                                style: TextStyle(
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                  color: isSelected
+                                      ? AppTheme.primaryColor
+                                      : null,
+                                ),
+                              ),
+                              subtitle: Text(
+                                prompt.key,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (e, s) => Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.error_outline,
+                              size: 48, color: Colors.red),
+                          const SizedBox(height: 16),
+                          Text('Erreur: $e',
+                              style: const TextStyle(color: Colors.red)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 24),
+
+          // Formulaire d'édition (droite)
+          Expanded(
+            child: _selectedPromptId == null && !_isEditing
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(32),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          child: const Icon(Icons.edit_note,
+                              size: 80, color: AppTheme.primaryColor),
+                        ),
+                        const SizedBox(height: 24),
+                        const Text(
+                          'Sélectionnez un prompt',
+                          style: TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Ou créez-en un nouveau',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  )
+                : Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceColor,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppTheme.messageBorder),
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.edit_note,
+                                  color: AppTheme.primaryColor, size: 28),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  _selectedPromptId == null
+                                      ? 'Nouveau Prompt'
+                                      : 'Modifier le Prompt',
+                                  style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              if (_selectedPromptId != null && !_isEditing)
+                                TextButton.icon(
+                                  onPressed: () => setState(() => _isEditing = true),
+                                  icon: const Icon(Icons.edit),
+                                  label: const Text('Modifier'),
+                                ),
+                            ],
+                          ),
+                          const Divider(height: 32),
+
+                          // Titre
+                          TextFormField(
+                            controller: _titleController,
+                            decoration: const InputDecoration(
+                              labelText: 'Titre *',
+                              hintText: 'Ex: Prompt Système',
+                              border: OutlineInputBorder(),
+                            ),
+                            enabled: _isEditing || _selectedPromptId == null,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Le titre est requis';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Clé
+                          TextFormField(
+                            controller: _keyController,
+                            decoration: const InputDecoration(
+                              labelText: 'Clé *',
+                              hintText: 'Ex: prompt_system',
+                              border: OutlineInputBorder(),
+                              helperText:
+                                  'Identifiant unique (ex: prompt_system, prompt_details_projet)',
+                            ),
+                            enabled: _selectedPromptId == null,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'La clé est requise';
+                              }
+                              if (!RegExp(r'^[a-z0-9_]+$').hasMatch(value)) {
+                                return 'Format: minuscules, chiffres et underscores uniquement';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Contenu
+                          Expanded(
+                            child: TextFormField(
+                              controller: _contentController,
+                              decoration: const InputDecoration(
+                                labelText: 'Contenu *',
+                                hintText:
+                                    'Écrivez le contenu du prompt...\n\nMarkdown supporté',
+                                border: OutlineInputBorder(),
+                                alignLabelWithHint: true,
+                              ),
+                              maxLines: null,
+                              expands: true,
+                              enabled: _isEditing || _selectedPromptId == null,
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Le contenu est requis';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+
+                          // Boutons d'action
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              if (_selectedPromptId != null &&
+                                  (_isEditing || _selectedPromptId == null))
+                                TextButton.icon(
+                                  onPressed: _deletePrompt,
+                                  icon: const Icon(Icons.delete_outline),
+                                  label: const Text('Supprimer'),
+                                  style: TextButton.styleFrom(
+                                      foregroundColor: Colors.red),
+                                ),
+                              const Spacer(),
+                              if (_isEditing || _selectedPromptId == null) ...[
+                                TextButton(
+                                  onPressed: _selectedPromptId == null
+                                      ? _clearForm
+                                      : () {
+                                          // Recharger le prompt original
+                                          final prompts =
+                                              ref.read(aiPromptsProvider).value;
+                                          if (prompts != null) {
+                                            final prompt = prompts.firstWhere(
+                                                (p) => p.id == _selectedPromptId);
+                                            _loadPrompt(prompt);
+                                          }
+                                        },
+                                  child: const Text('Annuler'),
+                                ),
+                                const SizedBox(width: 8),
+                                ElevatedButton.icon(
+                                  onPressed: _savePrompt,
+                                  icon: const Icon(Icons.save),
+                                  label: Text(_selectedPromptId == null
+                                      ? 'Créer'
+                                      : 'Enregistrer'),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
 }
