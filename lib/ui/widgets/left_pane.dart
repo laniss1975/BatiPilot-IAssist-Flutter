@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:test1/ui/providers/ui_providers.dart';
-import 'package:test1/ui/views/ai_control_center_view.dart';
+import 'package:test1/ui/views/ai_control_center_view_new.dart';
 import 'package:test1/ui/views/database_connection_view.dart';
 import 'package:test1/ui/views/project_details_view.dart';
 
