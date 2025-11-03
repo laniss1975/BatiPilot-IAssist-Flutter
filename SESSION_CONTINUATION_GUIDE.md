@@ -1,7 +1,7 @@
 # 🏗️ BâtiPilot IAssist - Documentation Synthétique pour Sessions Futures
 
 **Date de création:** 02 Novembre 2025
-**Dernière mise à jour:** 02 Novembre 2025 (PHASE 3 En Cours - Module Projet)
+**Dernière mise à jour:** 03 Novembre 2025 (Documentation IA & Architecture Prompts)
 **Statut du projet:** En développement (Recréation Flutter)
 **Stack:** Flutter + Supabase + Riverpod + Architecture IA modulaire
 
@@ -462,17 +462,57 @@ C:\Users\AL75\StudioProjects\test1/
 
 ## 🚀 PROCHAINES ÉTAPES
 
-**Session prochaine (Finaliser PHASE 3) :**
+**Session prochaine (Architecture IA-First) :**
 
-1. ✅ **Vérifier l'état du projet** (compilation, app lancée)
-2. ⏳ **Compléter PHASE 3 : Module Projet**
-   - Implémenter `saveProject()` - Persistence vers Supabase
-   - Créer `projectsHistoryProvider` - Liste des projets sauvegardés
-   - Créer widget `ProjectSelector` - Sélectionner/créer/charger projets
-   - Implémenter `loadProject()` - Charger projet depuis DB
+### Priorité 1: Implémenter les Tools (contextUpdate)
+
+L'objectif est de rendre l'IA pleinement opérationnelle pour exécuter des actions.
+
+1. **Implémenter les Tools manquants dans `tools_registry.dart`:**
+   - ✅ `UPDATE_PROJECT` - Mettre à jour les champs du projet
+   - ✅ `UPDATE_METADATA` - Mettre à jour les métadonnées
+   - ✅ `GENERATE_DEVIS_NUMBER` - Générer numéro automatique
+   - ✅ `GENERATE_PROJECT_NAME` - Générer nom automatique
+   - ✅ `ADD_CLIENT_TO_LIST` - Ajouter client à la liste
+   - ✅ `SAVE_PROJECT` - Sauvegarder en BDD
+   - ✅ `LOAD_PROJECT` - Charger depuis BDD
+   - ✅ `CREATE_COMPANY` - Créer une société
+   - ✅ `CREATE_CLIENT` - Créer un client
+
+2. **Enrichir le prompt système:**
+   - Ajouter le contenu de `AI_ACTIONS_LOGIC.md` dans le system prompt
+   - L'IA doit connaître toutes les actions disponibles
+   - L'IA doit connaître les formats de données
+
+3. **Tester l'IA avec des scénarios réels:**
+   - "Créer un devis pour M. Dupont Jean"
+   - "Générer le numéro et le nom du projet"
+   - "Ajouter une société Batiment Pro"
+
+### Priorité 2: Architecture Prompts en BDD (optionnel)
+
+Si temps disponible, commencer l'implémentation de `PROMPT_STORAGE_ARCHITECTURE.md`:
+
+1. **Phase 1: Structure de Base**
+   - Créer les tables Supabase (`ai_prompts`, `ai_prompt_suggestions`, `ai_prompt_templates`)
+   - Créer les modèles Flutter
+   - Créer les providers Riverpod
+   - Créer les templates par défaut
+
+2. **Phase 2: Interface Utilisateur**
+   - Nouveau module "Gestion des Prompts" dans Paramètres
+   - Éditeur de prompts avec prévisualisation
+
+### Priorité 3: Compléter PHASE 3 (Module Projet)
+
+Si les Tools sont fonctionnels, finaliser la PHASE 3:
+
+1. **Compléter les fonctionnalités de persistence:**
+   - Widget `ProjectSelector` - Sélectionner/créer/charger projets
+   - Provider `projectsHistoryProvider` - Liste des projets sauvegardés
    - Tester le cycle complet: créer → sauvegarder → charger
 
-3. ✅ **Puis PHASE 4 : Module Bien** (si PHASE 3 terminée)
+2. **Puis PHASE 4 : Module Bien** (si PHASE 3 terminée)
    - Gérer surfaces et déductions
    - Pièces, menuiseries, calculs automatiques
 
@@ -482,51 +522,66 @@ C:\Users\AL75\StudioProjects\test1/
 
 ```
 🏗️ PROJET: BâtiPilot IAssist - Flutter
-📍 Chemin: C:\Users\AL75\StudioProjects\test1
+📍 Chemin: C:\Users\AL75\StudioProjects\test1 (ou BatiPilot-IAssist-Flutter)
 
 ✅ PHASES COMPLETEES:
 1. Infrastructure + Sélecteur modèles IA
 2. Historique des chats
-   - Sélecteur chats en dropdown
-   - Créer/renommer/supprimer chats
-   - Multi-chats avec messages complets
+3. Module Projet (~75% - UI complète)
 
-🔄 PHASE EN COURS (~75%):
-3. Module Projet
-   ✅ Interface complète (3 sections)
-   ✅ Génération auto numéro devis (AAMM-N)
-   ✅ Génération auto nom projet
-   ✅ Gestion liste clients multi
-   ✅ Support types de clients
-   ⏳ Sauvegarder projet (saveProject)
-   ⏳ Charger projets (ProjectSelector + loadProject)
+🎯 NOUVELLE PRIORITÉ: Architecture IA-First
 
-📁 FICHIERS CLÉS PHASE 3:
-- lib/ui/views/project_details_view.dart → Interface projet (3 sections)
-- lib/providers/project_provider.dart → État + generateDevisNumber + generateProjectName
-- lib/providers/reference_data_provider.dart → Companies, Clients, ClientTypes
-- lib/models/project_model.dart → Project + ProjectMetadata
-- lib/models/client_type_model.dart → Type de client
+📚 DOCUMENTATION CRÉÉE (03/11/2025):
+1. AI_ACTIONS_LOGIC.md
+   - Documentation exhaustive des 118 actions de l'app
+   - Structure BDD, formats, patterns
+   - Cas d'usage pour l'IA
 
-📊 TABLES SUPABASE PHASE 3:
-- devis_save → Projets (à utiliser pour saveProject)
-- companies → Entreprises
-- clients → Clients
-- client_types → Types clients (Particulier, Société, etc.)
-- user_settings → Préférences (selectedCompanyId)
+2. PROMPT_STORAGE_ARCHITECTURE.md
+   - Proposition: stocker prompts en BDD (pas en dur)
+   - UI édition prompts + suggestions IA
+   - Plan d'implémentation 5 phases
+
+🔧 PROBLÈME IDENTIFIÉ:
+- ✅ L'IA reçoit projectState (via assistant_controller)
+- ❌ L'IA ne peut PAS modifier les données (Tools sont des stubs)
+- ❌ L'IA ne connaît pas les actions disponibles
+- ❌ L'IA ne connaît pas les formats de données
+
+⏳ PROCHAINES TÂCHES (Ordre de priorité):
+
+1. 🎯 PRIORITÉ 1: Implémenter les Tools dans tools_registry.dart
+   - UPDATE_PROJECT (mettre à jour projet)
+   - UPDATE_METADATA (mettre à jour métadonnées)
+   - GENERATE_DEVIS_NUMBER (générer numéro)
+   - GENERATE_PROJECT_NAME (générer nom)
+   - ADD_CLIENT_TO_LIST (ajouter client)
+   - CREATE_COMPANY (créer société)
+   - CREATE_CLIENT (créer client)
+   - SAVE_PROJECT (sauvegarder)
+   - LOAD_PROJECT (charger)
+
+2. 🎯 PRIORITÉ 2: Enrichir le system prompt
+   - Injecter contenu de AI_ACTIONS_LOGIC.md
+   - L'IA doit connaître toutes les actions
+   - L'IA doit connaître les formats
+
+3. 🎯 PRIORITÉ 3: Tester avec scénarios réels
+   - "Créer un devis pour M. Dupont"
+   - "Générer le numéro et le nom"
+   - L'IA doit pouvoir créer un client qui n'existe pas
+
+📁 FICHIERS CLÉS:
+- lib/assistant/tools_registry.dart → IMPLÉMENTER LES TOOLS ICI
+- lib/assistant/assistant_controller.dart → Enrichir system prompt
+- AI_ACTIONS_LOGIC.md → RÉFÉRENCE pour toutes les actions
+- PROMPT_STORAGE_ARCHITECTURE.md → Roadmap future
 
 🔄 ÉTAT ACTUEL:
 - App compilée et lancée ✅
 - Interface projet fonctionnelle ✅
-- Génération auto OK ✅
-- Reste: Persistence (save/load)
-
-⏳ PROCHAINES TÂCHES:
-1. Implémenter saveProject() pour persistence Supabase
-2. Créer projectsHistoryProvider (liste projets)
-3. Créer ProjectSelector widget
-4. Implémenter loadProject()
-5. Tester cycle complet
+- Documentation complète créée ✅
+- BESOIN: Tools fonctionnels pour "IA dans l'appli"
 ```
 
 ---
@@ -548,6 +603,31 @@ C:\Users\AL75\StudioProjects\test1/
 - **Contenu:** État actuel du projet, phases complétées, prochaines étapes
 - **Statut:** Mis à jour en continu
 
+### 4. AI_ACTIONS_LOGIC.md ✅ NOUVEAU (03/11/2025)
+- **Chemin:** `AI_ACTIONS_LOGIC.md`
+- **Contenu:** Documentation exhaustive de TOUTES les actions disponibles dans l'application
+  - Structure complète de la base de données (tables, relations, RLS)
+  - Formats de données (numéro devis AAMM-N, nom projet, clientsData, etc.)
+  - **118 actions documentées** : Authentification, Sociétés, Clients, Projets, Config IA, Chat
+  - Pour chaque action: déclencheur UI, champs, validation, opérations BDD, effets
+  - Patterns de comportement (loading, validation, feedback, rafraîchissement)
+  - Cas d'usage pour l'IA (scénarios "Créer un devis pour M. Seigneur Alain...")
+- **Objectif:** Permettre à l'IA de comprendre et reproduire TOUTES les actions utilisateur
+- **Statut:** Complet et prêt à être utilisé pour entraînement IA
+
+### 5. PROMPT_STORAGE_ARCHITECTURE.md ✅ NOUVEAU (03/11/2025)
+- **Chemin:** `PROMPT_STORAGE_ARCHITECTURE.md`
+- **Contenu:** Proposition complète pour stocker les prompts IA en base de données
+  - Schéma BDD: `ai_prompts`, `ai_prompt_suggestions`, `ai_prompt_templates`
+  - Types de prompts: system_context, tool_dispatcher, projects_assistant, error_handler
+  - Interface utilisateur: Module "Gestion des Prompts IA" dans Paramètres
+  - Éditeur de prompts avec coloration syntaxe, variables dynamiques, prévisualisation
+  - **Système de suggestions IA**: analyse automatique des conversations pour proposer améliorations
+  - Implémentation technique: Providers Riverpod, modèles, intégration AssistantController
+  - Plan d'implémentation en 5 phases
+- **Objectif:** Permettre à l'utilisateur de modifier les prompts sans redéploiement
+- **Statut:** Proposition à valider et implémenter (Phases 1-5)
+
 ---
 
 ## 📞 RESSOURCES
@@ -563,7 +643,7 @@ C:\Users\AL75\StudioProjects\test1/
 ---
 
 **Créé:** 02 Novembre 2025
-**Dernière mise à jour:** 02 Novembre 2025 - Session PHASE 3
+**Dernière mise à jour:** 03 Novembre 2025 - Documentation IA & Architecture
 **Utilisateur:** AL75
-**Statut:** PHASE 3 En Cours (~75%) 🔄
+**Statut:** Documentation complète créée ✅ - Prêt pour implémentation Tools
 **Branche Git:** `claude/session-continuation-setup-011CUjFx7p3rB8tYKXMat9Nm`
