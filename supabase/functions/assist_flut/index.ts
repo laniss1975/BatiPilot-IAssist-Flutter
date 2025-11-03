@@ -30,7 +30,7 @@ serve(async (req) => {
   }
 
   try {
-    const { module, userMessage, projectState } = await req.json();
+    const { module, userMessage, projectState, systemPrompt } = await req.json();
     const authHeader = req.headers.get('Authorization')!
     if (!authHeader) throw new Error('Missing Authorization header');
 
@@ -120,6 +120,10 @@ Historique de la conversation:
 Message de l'utilisateur:
 "${userMessage}"`;
 
+    // Utiliser le prompt système fourni ou le fallback
+    const effectiveSystemPrompt = systemPrompt || SYSTEM_PROMPT;
+    console.log(`[assist_flut] Utilisation du prompt système: ${systemPrompt ? 'depuis BDD' : 'hardcodé (fallback)'}`);
+
     // Construction du body selon le provider
     let requestBody;
     if (providerDetails.provider_key === 'google') {
@@ -127,7 +131,7 @@ Message de l'utilisateur:
       requestBody = {
         contents: [{
           parts: [{
-            text: `${SYSTEM_PROMPT}\n\n${fullPrompt}`
+            text: `${effectiveSystemPrompt}\n\n${fullPrompt}`
           }]
         }],
         generationConfig: {
@@ -140,7 +144,7 @@ Message de l'utilisateur:
       requestBody = {
         model: model,
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'system', content: effectiveSystemPrompt },
           { role: 'user', content: fullPrompt }
         ],
         temperature: 0.5,
