@@ -23,12 +23,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS clients_user_idempotency_uniq
   ON public.clients (user_id, idempotency_key)
   WHERE idempotency_key IS NOT NULL;
 
-ALTER TABLE public.projets
-  ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
-
-CREATE UNIQUE INDEX IF NOT EXISTS projets_user_idempotency_uniq
-  ON public.projets (user_id, idempotency_key)
-  WHERE idempotency_key IS NOT NULL;
+-- Note: La table des projets s'appelle 'devis_save' dans cette application
+-- devis_save n'a pas de user_id, seulement company_id
+-- On ajoute la colonne seulement si la table existe
+DO $devis$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'devis_save'
+  ) THEN
+    ALTER TABLE public.devis_save ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
+  END IF;
+END $devis$;
 
 -- Fonction de purge des logs (RGPD 90 jours)
 CREATE OR REPLACE FUNCTION purge_ai_logs()
