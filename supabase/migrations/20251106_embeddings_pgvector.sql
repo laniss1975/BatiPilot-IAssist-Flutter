@@ -23,22 +23,52 @@ CREATE TABLE IF NOT EXISTS public.ai_tool_embeddings (
 ALTER TABLE public.ai_tool_embeddings ENABLE ROW LEVEL SECURITY;
 
 -- Allow all authenticated users to read embeddings
-CREATE POLICY IF NOT EXISTS select_all_auth
-  ON public.ai_tool_embeddings
-  FOR SELECT TO authenticated
-  USING (true);
+DO $policy$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+    AND tablename = 'ai_tool_embeddings'
+    AND policyname = 'select_all_auth'
+  ) THEN
+    CREATE POLICY select_all_auth
+      ON public.ai_tool_embeddings
+      FOR SELECT TO authenticated
+      USING (true);
+  END IF;
+END $policy$;
 
 -- Block direct insert/update from authenticated users (only via Edge Function with service role)
-CREATE POLICY IF NOT EXISTS block_insert_auth
-  ON public.ai_tool_embeddings
-  FOR INSERT TO authenticated
-  WITH CHECK (false);
+DO $policy2$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+    AND tablename = 'ai_tool_embeddings'
+    AND policyname = 'block_insert_auth'
+  ) THEN
+    CREATE POLICY block_insert_auth
+      ON public.ai_tool_embeddings
+      FOR INSERT TO authenticated
+      WITH CHECK (false);
+  END IF;
+END $policy2$;
 
-CREATE POLICY IF NOT EXISTS block_update_auth
-  ON public.ai_tool_embeddings
-  FOR UPDATE TO authenticated
-  USING (false)
-  WITH CHECK (false);
+DO $policy3$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+    AND tablename = 'ai_tool_embeddings'
+    AND policyname = 'block_update_auth'
+  ) THEN
+    CREATE POLICY block_update_auth
+      ON public.ai_tool_embeddings
+      FOR UPDATE TO authenticated
+      USING (false)
+      WITH CHECK (false);
+  END IF;
+END $policy3$;
 
 -- RPC function for semantic search
 -- Returns top-k tools matching the query embedding, filtered by route
