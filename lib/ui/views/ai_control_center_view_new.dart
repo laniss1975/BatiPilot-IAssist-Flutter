@@ -10,54 +10,54 @@ import 'package:test1/models/ai_prompt_model.dart';
 class ApiKey {
   final String id;
   final String providerKey;
-  final String keyAlias;
-  final String? description;
+  final String? modelKey;
+  final String keyName;
+  final String? notes;
   final bool isActive;
-  
+
   ApiKey({
     required this.id,
     required this.providerKey,
-    required this.keyAlias,
-    this.description,
+    this.modelKey,
+    required this.keyName,
+    this.notes,
     required this.isActive,
   });
-  
+
   factory ApiKey.fromJson(Map<String, dynamic> json) => ApiKey(
     id: json['id'],
     providerKey: json['provider_key'],
-    keyAlias: json['key_alias'],
-    description: json['description'],
-    isActive: json['is_active'] ?? true,
+    modelKey: json['model_key'],
+    keyName: json['key_name'],
+    notes: json['notes'],
+    isActive: json['is_active'] ?? false,
   );
 }
 
 class ModelConfiguration {
   final String id;
-  final String providerKey;
-  final String modelKey;
-  final String apiKeyId;
-  final String configName;
+  final String providerName;
+  final String modelName;
   final String moduleName;
   final bool isActive;
-  
+  final String? systemPrompt;
+
   ModelConfiguration({
     required this.id,
-    required this.providerKey,
-    required this.modelKey,
-    required this.apiKeyId,
-    required this.configName,
+    required this.providerName,
+    required this.modelName,
     required this.moduleName,
     required this.isActive,
+    this.systemPrompt,
   });
-  
+
   factory ModelConfiguration.fromJson(Map<String, dynamic> json) => ModelConfiguration(
     id: json['id'],
-    providerKey: json['provider_key'],
-    modelKey: json['model_key'],
-    apiKeyId: json['api_key_id'],
-    configName: json['config_name'],
-    moduleName: json['module_name'],
+    providerName: json['provider_name'],
+    modelName: json['model_name'],
+    moduleName: json['module_name'] ?? 'global',
     isActive: json['is_active'] ?? false,
+    systemPrompt: json['system_prompt'],
   );
 }
 
@@ -65,24 +65,24 @@ class ModelConfiguration {
 final apiKeysProvider = FutureProvider.autoDispose<List<ApiKey>>((ref) async {
   final supabase = ref.watch(supabaseConnectionProvider).client;
   if (supabase == null) return [];
-  
+
   final response = await supabase
-      .from('ai_api_keys')
+      .from('user_api_keys')
       .select()
       .order('created_at', ascending: false);
-  
+
   return (response as List).map((e) => ApiKey.fromJson(e)).toList();
 });
 
 final modelConfigurationsProvider = FutureProvider.autoDispose<List<ModelConfiguration>>((ref) async {
   final supabase = ref.watch(supabaseConnectionProvider).client;
   if (supabase == null) return [];
-  
+
   final response = await supabase
-      .from('ai_model_configurations')
+      .from('ai_provider_configs')
       .select()
       .order('created_at', ascending: false);
-  
+
   return (response as List).map((e) => ModelConfiguration.fromJson(e)).toList();
 });
 
