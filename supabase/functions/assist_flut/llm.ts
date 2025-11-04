@@ -340,9 +340,108 @@ async function callClaude(
 }
 
 /**
- * Get LLM config from environment and user settings
+ * Get LLM config from USER database configuration (ai_provider_configs + user_api_keys)
+ * This is the PRIMARY method that respects user's model selection in the app
  */
-export function getLLMConfig(provider?: LLMProvider, model?: string): LLMConfig {
+export async function getUserLLMConfig(
+  supabase: any,
+  userId: string,
+  authHeader: string
+): Promise<LLMConfig> {
+  // 1. Load active model configuration from ai_provider_configs
+  const { data: configData, error: configError } = await supabase
+    .from('ai_provider_configs')
+    .select('provider_name, model_name')
+    .eq('user_id', userId)
+    .eq('module_name', 'global')
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (configError) {
+    throw new Error(`Failed to load user model config: ${configError.message}`);
+  }
+
+  if (!configData) {
+    throw new Error('No active model configuration found. Please configure a model in Settings > AI Control Center.');
+  }
+
+  const providerName = configData.provider_name;
+  const modelName = configData.model_name;
+
+  // 2. Load provider details from ai_providers
+  const { data: providerDetails, error: providerError } = await supabase
+    .from('ai_providers')
+    .select('provider_key, api_endpoint, api_auth_method, api_headers')
+    .eq('provider_key', providerName)
+    .single();
+
+  if (providerError) {
+    throw new Error(`Failed to load provider details: ${providerError.message}`);
+  }
+
+  if (!providerDetails) {
+    throw new Error(`Provider ${providerName} not found in ai_providers table.`);
+  }
+
+  // 3. Get user's API key via ai-keys-manager edge function
+  const keysManagerUrl = `${Deno.env.get('SUPABASE_URL')!}/functions/v1/ai-keys-manager`;
+
+  const keyResponse = await fetch(keysManagerUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': authHeader,
+      'x-internal-token': Deno.env.get('EDGE_FUNCTIONS_SECRET') || '',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      action: 'get-key',
+      provider: providerDetails.provider_key,
+    }),
+  });
+
+  if (!keyResponse.ok) {
+    const errorBody = await keyResponse.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(`Failed to get API key: ${errorBody.error || keyResponse.statusText}`);
+  }
+
+  const keyData = await keyResponse.json();
+
+  if (!keyData.success || !keyData.apiKey) {
+    throw new Error(`API key not found for provider ${providerName}. Please add an API key in Settings.`);
+  }
+
+  // Map provider_key to LLMProvider type
+  let provider: LLMProvider;
+  switch (providerDetails.provider_key) {
+    case 'openai':
+      provider = 'openai';
+      break;
+    case 'google':
+    case 'gemini':
+      provider = 'gemini';
+      break;
+    case 'anthropic':
+    case 'claude':
+      provider = 'claude';
+      break;
+    default:
+      throw new Error(`Unsupported provider: ${providerDetails.provider_key}`);
+  }
+
+  return {
+    provider,
+    model: modelName,
+    api_key: keyData.apiKey,
+    temperature: 0.7,
+    max_tokens: 4000,
+  };
+}
+
+/**
+ * Get LLM config from environment variables (FALLBACK only - for admin/testing)
+ * NOTE: This should NOT be used for normal user requests
+ */
+export function getLLMConfigFromEnv(provider?: LLMProvider, model?: string): LLMConfig {
   const effectiveProvider = provider || (Deno.env.get('DEFAULT_LLM_PROVIDER') as LLMProvider) || 'openai';
 
   let api_key = '';

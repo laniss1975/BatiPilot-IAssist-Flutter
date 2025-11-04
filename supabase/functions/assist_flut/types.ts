@@ -47,6 +47,7 @@ export type ExecuteContext = {
   signal?: AbortSignal;
   tokensIn?: number;
   tokensOut?: number;
+  authHeader?: string; // Required for getUserLLMConfig
 };
 
 export type ExecuteResult =

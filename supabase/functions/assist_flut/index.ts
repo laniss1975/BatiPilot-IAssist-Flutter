@@ -102,6 +102,7 @@ Deno.serve(async (req) => {
         runId: '', // Will be set in agentLoop
         traceId: crypto.randomUUID(),
         currentRoute: currentRoute || 'home',
+        authHeader, // Pass auth header for user config loading
       };
 
       // Start Agent Loop (returns SSE stream)

@@ -12,7 +12,7 @@ import { loadToolsForRoute } from './tools-loader.ts';
 import { executeTool } from './executeTool.ts';
 import { getPlannerPrompt, getExecutorPrompt, buildToolsSubsetDoc, formatToolsForProvider } from './prompts.ts';
 import { maskPII } from './utils.ts';
-import { callLLM, getLLMConfig } from './llm.ts';
+import { callLLM, getUserLLMConfig } from './llm.ts';
 import type { ExecuteContext } from './types.ts';
 import type { LLMMessage } from './llm.ts';
 
@@ -200,8 +200,8 @@ async function callPlanner(
     { role: 'user', content: userMessage },
   ];
 
-  // Get LLM config
-  const llmConfig = getLLMConfig();
+  // Get LLM config from user's database configuration
+  const llmConfig = await getUserLLMConfig(ctx.supabase, ctx.userId, ctx.authHeader || '');
 
   // Call LLM (no tools for Planner, pure JSON response)
   const response = await callLLM(messages, [], llmConfig);
@@ -271,8 +271,8 @@ async function executePlan(
     },
   ];
 
-  // Get LLM config
-  const llmConfig = getLLMConfig();
+  // Get LLM config from user's database configuration
+  const llmConfig = await getUserLLMConfig(ctx.supabase, ctx.userId, ctx.authHeader || '');
 
   while (iterations++ < MAX_ITERATIONS) {
     // Call LLM with function calling
