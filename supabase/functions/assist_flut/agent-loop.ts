@@ -12,7 +12,9 @@ import { loadToolsForRoute } from './tools-loader.ts';
 import { executeTool } from './executeTool.ts';
 import { getPlannerPrompt, getExecutorPrompt, buildToolsSubsetDoc, formatToolsForProvider } from './prompts.ts';
 import { maskPII } from './utils.ts';
+import { callLLM, getLLMConfig } from './llm.ts';
 import type { ExecuteContext } from './types.ts';
+import type { LLMMessage } from './llm.ts';
 
 const MAX_ITERATIONS = 5;
 const MAX_SELF_REPAIR_ATTEMPTS = 2;
@@ -176,11 +178,7 @@ async function callPlanner(
   const toolsDoc = buildToolsSubsetDoc(tools);
   const prompt = getPlannerPrompt(userMessage, ctx.currentRoute || 'home', 'user', toolsDoc);
 
-  // TODO: Call LLM API (OpenAI, Gemini, etc.)
-  // For now, return a mock plan for testing
-  console.log('[Planner] Prompt:', prompt);
-
-  // Log message
+  // Log user message
   await ctx.supabase.from('ai_messages').insert({
     run_id: ctx.runId,
     user_id: ctx.userId,
@@ -188,6 +186,7 @@ async function callPlanner(
     content: maskPII(userMessage),
   });
 
+  // Log system prompt
   await ctx.supabase.from('ai_messages').insert({
     run_id: ctx.runId,
     user_id: ctx.userId,
@@ -195,32 +194,62 @@ async function callPlanner(
     content: maskPII(prompt),
   });
 
-  // TODO: Replace with real LLM call
-  const mockPlan = {
-    plan_id: 'plan_' + Date.now(),
-    summary: 'Créer un client Jean Dupont',
-    steps: [
-      {
-        id: 's1',
-        type: 'tool',
-        description: 'Créer le client Jean Dupont',
-        tool_key: 'create_client',
-        args: { nom: 'Dupont', prenom: 'Jean', email: 'jean@dupont.fr' },
-        requires_confirmation: true,
-        success_criteria: 'Client créé avec succès',
-        on_error: 'ask_user',
-      },
-    ],
-    questions_for_user: [],
-    estimated_calls: { tools: 1, llm_rounds: 1 },
-    stop_reasons: ['user_confirmation_required'],
-  };
+  // Build messages for Planner
+  const messages: LLMMessage[] = [
+    { role: 'system', content: prompt },
+    { role: 'user', content: userMessage },
+  ];
 
-  return mockPlan;
+  // Get LLM config
+  const llmConfig = getLLMConfig();
+
+  // Call LLM (no tools for Planner, pure JSON response)
+  const response = await callLLM(messages, [], llmConfig);
+
+  // Log assistant response
+  await ctx.supabase.from('ai_messages').insert({
+    run_id: ctx.runId,
+    user_id: ctx.userId,
+    role: 'assistant',
+    content: maskPII(response.content),
+  });
+
+  // Update run tokens
+  await ctx.supabase.from('ai_runs').update({
+    tokens_in: (ctx.tokensIn || 0) + (response.usage?.input_tokens || 0),
+    tokens_out: (ctx.tokensOut || 0) + (response.usage?.output_tokens || 0),
+  }).eq('id', ctx.runId);
+
+  // Parse JSON response
+  let plan: any;
+  try {
+    // Extract JSON from markdown code blocks if present
+    let jsonStr = response.content.trim();
+    const jsonMatch = jsonStr.match(/```json\n([\s\S]*?)\n```/);
+    if (jsonMatch) {
+      jsonStr = jsonMatch[1];
+    }
+    plan = JSON.parse(jsonStr);
+  } catch (error: any) {
+    console.error('[Planner] Failed to parse JSON:', error.message);
+    throw new Error(`Planner returned invalid JSON: ${error.message}`);
+  }
+
+  // Validate plan structure
+  if (!plan.summary || !Array.isArray(plan.steps)) {
+    throw new Error('Invalid plan structure (missing summary or steps)');
+  }
+
+  // Add plan_id if missing
+  if (!plan.plan_id) {
+    plan.plan_id = 'plan_' + Date.now();
+  }
+
+  return plan;
 }
 
 /**
- * Execute plan with Tools + self-repair
+ * Execute plan with Tools + self-repair (with LLM function calling)
  */
 async function executePlan(
   plan: any,
@@ -231,115 +260,155 @@ async function executePlan(
   let iterations = 0;
 
   // Build initial messages for Executor
-  const messages: any[] = [
+  const messages: LLMMessage[] = [
     {
       role: 'system',
       content: getExecutorPrompt(plan, ctx.currentRoute || 'home', 'user', tools),
     },
+    {
+      role: 'user',
+      content: `Exécute le plan suivant:\n\n${JSON.stringify(plan, null, 2)}`,
+    },
   ];
 
-  while (iterations++ < MAX_ITERATIONS) {
-    // TODO: Call LLM with function calling
-    // For now, simulate tool_calls from plan
+  // Get LLM config
+  const llmConfig = getLLMConfig();
 
-    if (!plan.steps || plan.steps.length === 0) {
-      break;
+  while (iterations++ < MAX_ITERATIONS) {
+    // Call LLM with function calling
+    const response = await callLLM(messages, tools, llmConfig);
+
+    // Update tokens
+    await ctx.supabase.from('ai_runs').update({
+      tokens_in: (ctx.tokensIn || 0) + (response.usage?.input_tokens || 0),
+      tokens_out: (ctx.tokensOut || 0) + (response.usage?.output_tokens || 0),
+      iterations: iterations,
+    }).eq('id', ctx.runId);
+
+    // If no tool_calls, the LLM is done
+    if (!response.tool_calls || response.tool_calls.length === 0) {
+      // Final answer
+      send(SSE_EVENTS.ANSWER_FINAL, {
+        run_id: ctx.runId,
+        answer: response.content,
+        stop_reason: 'done',
+      });
+
+      await ctx.supabase.from('ai_messages').insert({
+        run_id: ctx.runId,
+        user_id: ctx.userId,
+        role: 'assistant',
+        content: maskPII(response.content),
+      });
+
+      return;
     }
 
-    for (const step of plan.steps) {
-      if (step.type !== 'tool' || !step.tool_key) {
-        continue;
-      }
+    // Add assistant message with tool_calls
+    messages.push({
+      role: 'assistant',
+      content: response.content || '',
+      tool_calls: response.tool_calls,
+    });
 
-      const tool = tools.find((t) => t.key === step.tool_key);
+    await ctx.supabase.from('ai_messages').insert({
+      run_id: ctx.runId,
+      user_id: ctx.userId,
+      role: 'assistant',
+      content: maskPII(response.content || `[${response.tool_calls.length} tool call(s)]`),
+    });
+
+    // Execute each tool call
+    for (const toolCall of response.tool_calls) {
+      const toolKey = toolCall.function.name;
+      const tool = tools.find((t) => t.key === toolKey);
+
       if (!tool) {
         send(SSE_EVENTS.TOOL_CALL_FAILED, {
           run_id: ctx.runId,
-          tool_key: step.tool_key,
-          error: { code: 'TOOL_NOT_FOUND', message: `Tool ${step.tool_key} not found` },
+          tool_key: toolKey,
+          error: { code: 'TOOL_NOT_FOUND', message: `Tool ${toolKey} not found` },
+        });
+
+        // Add error to messages
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ error: 'TOOL_NOT_FOUND', message: `Tool ${toolKey} not found` }),
         });
         continue;
       }
 
-      // Check confirmation (already done in planner, but double-check)
-      if (step.requires_confirmation) {
-        // This shouldn't happen in executor phase (should be caught in planner)
-        send(SSE_EVENTS.USER_CONFIRMATION_REQUESTED, {
+      // Parse args
+      let args: any;
+      try {
+        args = JSON.parse(toolCall.function.arguments);
+      } catch (error: any) {
+        send(SSE_EVENTS.TOOL_CALL_FAILED, {
           run_id: ctx.runId,
-          step: step,
+          tool_key: toolKey,
+          error: { code: 'INVALID_ARGS', message: `Invalid JSON arguments: ${error.message}` },
         });
-        return;
+
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ error: 'INVALID_ARGS', message: error.message }),
+        });
+        continue;
       }
 
-      // Self-repair loop
-      let attempt = 0;
-      let execOk = false;
+      // Execute tool (with self-repair handled internally)
+      send(SSE_EVENTS.TOOL_CALL_STARTED, {
+        run_id: ctx.runId,
+        tool_key: toolKey,
+        args_preview: maskPII(JSON.stringify(args).substring(0, 200)),
+      });
 
-      while (attempt++ <= MAX_SELF_REPAIR_ATTEMPTS && !execOk) {
-        send(SSE_EVENTS.TOOL_CALL_STARTED, {
+      const exec = await executeTool(tool, args, ctx);
+
+      if (exec.ok) {
+        send(SSE_EVENTS.TOOL_CALL_SUCCEEDED, {
           run_id: ctx.runId,
-          tool_key: tool.key,
-          args_preview: maskPII(JSON.stringify(step.args)),
+          tool_key: toolKey,
+          result_preview: maskPII(JSON.stringify(exec.result).substring(0, 200)),
         });
 
-        const exec = await executeTool(tool, step.args, ctx);
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(exec.result),
+        });
 
-        if (exec.ok) {
-          send(SSE_EVENTS.TOOL_CALL_SUCCEEDED, {
-            run_id: ctx.runId,
-            tool_key: tool.key,
-            result_preview: maskPII(JSON.stringify(exec.result).substring(0, 200)),
-          });
+        await ctx.supabase.from('ai_messages').insert({
+          run_id: ctx.runId,
+          user_id: ctx.userId,
+          role: 'tool',
+          content: maskPII(`Tool ${toolKey} succeeded: ${JSON.stringify(exec.result).substring(0, 200)}...`),
+        });
+      } else {
+        send(SSE_EVENTS.TOOL_CALL_FAILED, {
+          run_id: ctx.runId,
+          tool_key: toolKey,
+          error: exec.error,
+        });
 
-          messages.push({
-            role: 'tool',
-            tool_call_id: step.id,
-            content: JSON.stringify(exec.result),
-          });
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ error: exec.error }),
+        });
 
-          execOk = true;
-        } else {
-          send(SSE_EVENTS.TOOL_CALL_FAILED, {
-            run_id: ctx.runId,
-            tool_key: tool.key,
-            error: exec.error,
-            attempt: attempt,
-            max_attempts: MAX_SELF_REPAIR_ATTEMPTS + 1,
-          });
-
-          messages.push({
-            role: 'tool',
-            tool_call_id: step.id,
-            content: JSON.stringify({ tool_error: exec.error }),
-          });
-
-          if (attempt > MAX_SELF_REPAIR_ATTEMPTS) {
-            messages.push({
-              role: 'assistant',
-              content: `Je n'ai pas pu exécuter ${tool.key} après ${MAX_SELF_REPAIR_ATTEMPTS + 1} tentatives (erreur: ${exec.error.code}). Voulez-vous corriger ou annuler ?`,
-            });
-
-            send(SSE_EVENTS.ANSWER_FINAL, {
-              run_id: ctx.runId,
-              answer: `Erreur lors de l'exécution de ${tool.key}: ${exec.error.message}`,
-              stop_reason: 'execution_error',
-            });
-
-            return;
-          }
-        }
+        await ctx.supabase.from('ai_messages').insert({
+          run_id: ctx.runId,
+          user_id: ctx.userId,
+          role: 'tool',
+          content: maskPII(`Tool ${toolKey} failed: ${JSON.stringify(exec.error)}`),
+        });
       }
     }
 
-    // After executing all steps, send final answer
-    send(SSE_EVENTS.ANSWER_FINAL, {
-      run_id: ctx.runId,
-      answer: 'Plan exécuté avec succès.',
-      tools_used: plan.steps.map((s: any) => s.tool_key).filter(Boolean),
-      stop_reason: 'done',
-    });
-
-    return;
+    // Continue loop to let LLM process tool results and decide next action
   }
 
   // Max iterations reached
@@ -349,5 +418,11 @@ async function executePlan(
       code: 'MAX_ITERATIONS',
       message: `Max iterations (${MAX_ITERATIONS}) atteintes`,
     },
+  });
+
+  send(SSE_EVENTS.ANSWER_FINAL, {
+    run_id: ctx.runId,
+    answer: 'Désolé, j\'ai atteint le nombre maximum d\'itérations sans terminer la tâche.',
+    stop_reason: 'max_iterations',
   });
 }

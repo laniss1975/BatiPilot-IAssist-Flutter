@@ -45,6 +45,8 @@ export type ExecuteContext = {
   traceId?: string;
   currentRoute?: string;
   signal?: AbortSignal;
+  tokensIn?: number;
+  tokensOut?: number;
 };
 
 export type ExecuteResult =
