@@ -348,6 +348,8 @@ export async function getUserLLMConfig(
   userId: string,
   authHeader: string
 ): Promise<LLMConfig> {
+  console.log('[getUserLLMConfig] Starting - userId:', userId);
+
   // 1. Load active model configuration from ai_provider_configs
   const { data: configData, error: configError } = await supabase
     .from('ai_provider_configs')
@@ -357,16 +359,21 @@ export async function getUserLLMConfig(
     .eq('is_active', true)
     .maybeSingle();
 
+  console.log('[getUserLLMConfig] Config query result:', { configData, configError });
+
   if (configError) {
+    console.error('[getUserLLMConfig] Config error:', configError);
     throw new Error(`Failed to load user model config: ${configError.message}`);
   }
 
   if (!configData) {
+    console.error('[getUserLLMConfig] No active config found for user:', userId);
     throw new Error('No active model configuration found. Please configure a model in Settings > AI Control Center.');
   }
 
   const providerName = configData.provider_name;
   const modelName = configData.model_name;
+  console.log('[getUserLLMConfig] Using provider:', providerName, 'model:', modelName);
 
   // 2. Load provider details from ai_providers
   const { data: providerDetails, error: providerError } = await supabase
@@ -375,16 +382,21 @@ export async function getUserLLMConfig(
     .eq('provider_key', providerName)
     .single();
 
+  console.log('[getUserLLMConfig] Provider query result:', { providerDetails, providerError });
+
   if (providerError) {
+    console.error('[getUserLLMConfig] Provider error:', providerError);
     throw new Error(`Failed to load provider details: ${providerError.message}`);
   }
 
   if (!providerDetails) {
+    console.error('[getUserLLMConfig] Provider not found:', providerName);
     throw new Error(`Provider ${providerName} not found in ai_providers table.`);
   }
 
   // 3. Get user's API key via ai-keys-manager edge function
   const keysManagerUrl = `${Deno.env.get('SUPABASE_URL')!}/functions/v1/ai-keys-manager`;
+  console.log('[getUserLLMConfig] Calling ai-keys-manager at:', keysManagerUrl);
 
   const keyResponse = await fetch(keysManagerUrl, {
     method: 'POST',
@@ -399,14 +411,19 @@ export async function getUserLLMConfig(
     }),
   });
 
+  console.log('[getUserLLMConfig] ai-keys-manager response status:', keyResponse.status);
+
   if (!keyResponse.ok) {
     const errorBody = await keyResponse.json().catch(() => ({ error: 'Unknown error' }));
+    console.error('[getUserLLMConfig] ai-keys-manager error:', errorBody);
     throw new Error(`Failed to get API key: ${errorBody.error || keyResponse.statusText}`);
   }
 
   const keyData = await keyResponse.json();
+  console.log('[getUserLLMConfig] API key retrieved successfully:', { hasKey: !!keyData.apiKey, success: keyData.success });
 
   if (!keyData.success || !keyData.apiKey) {
+    console.error('[getUserLLMConfig] No valid API key returned');
     throw new Error(`API key not found for provider ${providerName}. Please add an API key in Settings.`);
   }
 
@@ -425,8 +442,11 @@ export async function getUserLLMConfig(
       provider = 'claude';
       break;
     default:
+      console.error('[getUserLLMConfig] Unsupported provider:', providerDetails.provider_key);
       throw new Error(`Unsupported provider: ${providerDetails.provider_key}`);
   }
+
+  console.log('[getUserLLMConfig] Success! Returning config for:', provider, modelName);
 
   return {
     provider,

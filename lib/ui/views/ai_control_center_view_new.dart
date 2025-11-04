@@ -5,6 +5,7 @@ import 'package:test1/providers/supabase_connection_provider.dart';
 import 'package:test1/ui/dialogs/ai_config_dialogs.dart';
 import 'package:test1/providers/ai_prompts_provider.dart';
 import 'package:test1/models/ai_prompt_model.dart';
+import 'package:test1/providers/active_model_provider.dart';
 
 // Modèles de données
 class ApiKey {
@@ -504,7 +505,7 @@ class _ConfigurationCard extends ConsumerWidget {
             ),
             if (!config.isActive)
               TextButton.icon(
-                onPressed: () => _activateConfig(ref, config.id),
+                onPressed: () => _activateConfig(ref, config.id, context),
                 icon: const Icon(Icons.play_arrow, size: 18),
                 label: const Text('Activer'),
               ),
@@ -546,43 +547,160 @@ class _EmptyStateConfigs extends StatelessWidget {
 }
 
 // ========== Dialogs ==========
-void _showAddApiKeyDialog(BuildContext context, WidgetRef ref) {
-  // TODO: Implémenter le dialog d'ajout de clé
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Fonction d\'ajout de clé à implémenter')),
+void _showAddApiKeyDialog(BuildContext context, WidgetRef ref) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (context) => const AddEditApiKeyDialog(),
   );
+
+  if (result == true) {
+    ref.invalidate(apiKeysProvider);
+  }
 }
 
-void _showEditApiKeyDialog(BuildContext context, WidgetRef ref, ApiKey apiKey) {
-  // TODO: Implémenter le dialog d'édition
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Fonction d\'édition à implémenter')),
+void _showEditApiKeyDialog(BuildContext context, WidgetRef ref, ApiKey apiKey) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (context) => AddEditApiKeyDialog(
+      keyId: apiKey.id,
+      initialProviderKey: apiKey.providerKey,
+      initialAlias: apiKey.keyName,
+      initialDescription: apiKey.notes,
+    ),
   );
+
+  if (result == true) {
+    ref.invalidate(apiKeysProvider);
+  }
 }
 
-void _showAddConfigDialog(BuildContext context, WidgetRef ref) {
-  // TODO: Implémenter le dialog de création de configuration
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Fonction de création de configuration à implémenter')),
+void _showAddConfigDialog(BuildContext context, WidgetRef ref) async {
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (context) => const AddConfigurationDialog(),
   );
+
+  if (result == true) {
+    ref.invalidate(modelConfigurationsProvider);
+  }
 }
 
 Future<void> _deleteApiKey(BuildContext context, WidgetRef ref, String id) async {
-  // TODO: Implémenter la suppression
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Suppression à implémenter')),
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Supprimer la clé'),
+      content: const Text('Voulez-vous vraiment supprimer cette clé API ?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Annuler'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: TextButton.styleFrom(foregroundColor: Colors.red),
+          child: const Text('Supprimer'),
+        ),
+      ],
+    ),
   );
+
+  if (confirm == true) {
+    try {
+      final supabase = ref.read(supabaseConnectionProvider).client;
+      await supabase!.from('user_api_keys').delete().eq('id', id);
+      ref.invalidate(apiKeysProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Clé supprimée avec succès')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
 }
 
 Future<void> _deleteConfig(BuildContext context, WidgetRef ref, String id) async {
-  // TODO: Implémenter la suppression
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Suppression à implémenter')),
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Supprimer la configuration'),
+      content: const Text('Voulez-vous vraiment supprimer cette configuration ?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Annuler'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: TextButton.styleFrom(foregroundColor: Colors.red),
+          child: const Text('Supprimer'),
+        ),
+      ],
+    ),
   );
+
+  if (confirm == true) {
+    try {
+      final supabase = ref.read(supabaseConnectionProvider).client;
+      await supabase!.from('ai_provider_configs').delete().eq('id', id);
+      ref.invalidate(modelConfigurationsProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Configuration supprimée avec succès')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
 }
 
-Future<void> _activateConfig(WidgetRef ref, String id) async {
-  // TODO: Implémenter l'activation
+Future<void> _activateConfig(WidgetRef ref, String configId, BuildContext context) async {
+  try {
+    // Récupérer la config pour obtenir provider_name et model_name
+    final supabase = ref.read(supabaseConnectionProvider).client;
+    final configData = await supabase!
+        .from('ai_provider_configs')
+        .select('provider_name, model_name')
+        .eq('id', configId)
+        .single();
+
+    // Appeler la fonction RPC pour activer
+    await ref.read(activeModelProvider.notifier).setActiveModel(
+      configData['provider_name'] as String,
+      configData['model_name'] as String,
+    );
+
+    ref.invalidate(modelConfigurationsProvider);
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Configuration activée avec succès'),
+          backgroundColor: AppTheme.accentColor,
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur lors de l\'activation: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 }
 
 // ========== Onglet Prompts Assistant ==========
