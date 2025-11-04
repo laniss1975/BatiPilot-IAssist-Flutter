@@ -340,7 +340,7 @@ async function callClaude(
 }
 
 /**
- * Get LLM config from USER database configuration (ai_model_configurations + ai_api_keys)
+ * Get LLM config from USER database configuration (ai_provider_configs + user_api_keys)
  * This is the PRIMARY method that respects user's model selection in the app
  */
 export async function getUserLLMConfig(
@@ -348,10 +348,10 @@ export async function getUserLLMConfig(
   userId: string,
   authHeader: string
 ): Promise<LLMConfig> {
-  // 1. Load active model configuration from ai_model_configurations
+  // 1. Load active model configuration from ai_provider_configs
   const { data: configData, error: configError } = await supabase
-    .from('ai_model_configurations')
-    .select('provider_key, model_key, api_key_id')
+    .from('ai_provider_configs')
+    .select('provider_name, model_name')
     .eq('user_id', userId)
     .eq('module_name', 'global')
     .eq('is_active', true)
@@ -365,36 +365,54 @@ export async function getUserLLMConfig(
     throw new Error('No active model configuration found. Please configure a model in Settings > AI Control Center.');
   }
 
-  const providerKey = configData.provider_key;
-  const modelKey = configData.model_key;
-  const apiKeyId = configData.api_key_id;
+  const providerName = configData.provider_name;
+  const modelName = configData.model_name;
 
-  // 2. Load and decrypt API key from ai_api_keys
-  const { data: apiKeyData, error: apiKeyError } = await supabase
-    .from('ai_api_keys')
-    .select('encrypted_key')
-    .eq('id', apiKeyId)
+  // 2. Load provider details from ai_providers
+  const { data: providerDetails, error: providerError } = await supabase
+    .from('ai_providers')
+    .select('provider_key, api_endpoint, api_auth_method, api_headers')
+    .eq('provider_key', providerName)
     .single();
 
-  if (apiKeyError) {
-    throw new Error(`Failed to load API key: ${apiKeyError.message}`);
+  if (providerError) {
+    throw new Error(`Failed to load provider details: ${providerError.message}`);
   }
 
-  if (!apiKeyData || !apiKeyData.encrypted_key) {
-    throw new Error(`API key not found for configuration. Please add an API key in Settings.`);
+  if (!providerDetails) {
+    throw new Error(`Provider ${providerName} not found in ai_providers table.`);
   }
 
-  // 3. Decrypt API key (simple base64 decoding)
-  let decryptedKey: string;
-  try {
-    decryptedKey = atob(apiKeyData.encrypted_key);
-  } catch (error: any) {
-    throw new Error(`Failed to decrypt API key: ${error.message}`);
+  // 3. Get user's API key via ai-keys-manager edge function
+  const keysManagerUrl = `${Deno.env.get('SUPABASE_URL')!}/functions/v1/ai-keys-manager`;
+
+  const keyResponse = await fetch(keysManagerUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': authHeader,
+      'x-internal-token': Deno.env.get('EDGE_FUNCTIONS_SECRET') || '',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      action: 'get-key',
+      provider: providerDetails.provider_key,
+    }),
+  });
+
+  if (!keyResponse.ok) {
+    const errorBody = await keyResponse.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(`Failed to get API key: ${errorBody.error || keyResponse.statusText}`);
+  }
+
+  const keyData = await keyResponse.json();
+
+  if (!keyData.success || !keyData.apiKey) {
+    throw new Error(`API key not found for provider ${providerName}. Please add an API key in Settings.`);
   }
 
   // Map provider_key to LLMProvider type
   let provider: LLMProvider;
-  switch (providerKey) {
+  switch (providerDetails.provider_key) {
     case 'openai':
       provider = 'openai';
       break;
@@ -407,13 +425,13 @@ export async function getUserLLMConfig(
       provider = 'claude';
       break;
     default:
-      throw new Error(`Unsupported provider: ${providerKey}`);
+      throw new Error(`Unsupported provider: ${providerDetails.provider_key}`);
   }
 
   return {
     provider,
-    model: modelKey,
-    api_key: decryptedKey,
+    model: modelName,
+    api_key: keyData.apiKey,
     temperature: 0.7,
     max_tokens: 4000,
   };
