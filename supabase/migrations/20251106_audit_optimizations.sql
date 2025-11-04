@@ -49,14 +49,12 @@ $$;
 -- pg_cron: purge quotidienne à 3h du matin
 -- NOTE: pg_cron doit être activé dans Supabase Dashboard > Database > Extensions
 -- Si pg_cron pas dispo, utiliser un Edge Scheduled Function à la place
-DO $$
+DO $outer$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
-    PERFORM cron.schedule('purge_ai_logs_daily', '0 3 * * *',
-      $$SELECT purge_ai_logs();$$
-    );
+    PERFORM cron.schedule('purge_ai_logs_daily', '0 3 * * *', 'SELECT purge_ai_logs();');
   END IF;
-END $$;
+END $outer$;
 
 -- Ajouter colonne context pour stocker état Agent (plan en attente, etc.)
 ALTER TABLE public.ai_runs
