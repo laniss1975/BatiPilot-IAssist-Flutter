@@ -273,7 +273,7 @@ class _ApiKeyCard extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        apiKey.keyAlias,
+                        apiKey.keyName,
                         style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -296,10 +296,10 @@ class _ApiKeyCard extends ConsumerWidget {
                 ),
               ],
             ),
-            if (apiKey.description != null) ...[
+            if (apiKey.notes != null) ...[
               const SizedBox(height: 12),
               Text(
-                apiKey.description!,
+                apiKey.notes!,
                 style: TextStyle(fontSize: 13, color: Colors.grey[700]),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -491,12 +491,12 @@ class _ConfigurationCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    config.configName,
+                    '${config.providerName} - ${config.modelName}',
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${config.modelKey} • Module: ${config.moduleName}',
+                    'Module: ${config.moduleName}${config.isActive ? " (Actif)" : ""}',
                     style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                   ),
                 ],
