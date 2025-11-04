@@ -2,6 +2,7 @@ import { ajv } from "./ajv.ts";
 import { checkRateLimit } from "./rate-limit.ts";
 import { withTimeout, maskPII } from "./utils.ts";
 import { ToolDefinition, ExecuteContext, ExecuteResult } from "./types.ts";
+import { deriveIdempotencyKey } from "./deriveIdempotencyKey.ts";
 
 // Validateur cache par tool.key
 const validators = new Map<string, any>();
@@ -80,6 +81,20 @@ export async function executeTool(
         if (!fn) {
           throw new Error('RPC function not specified');
         }
+
+        // Idempotency: auto-derive key if configured
+        if (tool.idempotency?.key_field && Array.isArray(tool.idempotency?.derive_from)) {
+          const key = await deriveIdempotencyKey(
+            tool.key,
+            ctx.userId,
+            args,
+            tool.idempotency.derive_from
+          );
+          if (!args[tool.idempotency.key_field]) {
+            args[tool.idempotency.key_field] = key;
+          }
+        }
+
         // Appel RPC
         const rpcResult = await withTimeout(
           ctx.supabase.rpc(fn, args),
