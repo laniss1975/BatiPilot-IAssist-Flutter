@@ -58,25 +58,27 @@ class _AddEditApiKeyDialogState extends ConsumerState<AddEditApiKeyDialog> {
       
       if (widget.keyId == null) {
         // Nouvelle clé
-        await supabase.from('ai_api_keys').insert({
+        await supabase.from('user_api_keys').insert({
           'provider_key': _selectedProvider,
-          'key_alias': _aliasController.text.trim(),
-          'description': _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
-          'encrypted_key': _keyController.text.trim(), // TODO: chiffrer côté serveur
+          'key_name': _aliasController.text.trim(),
+          'notes': _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
+          // TODO: Utiliser ai-keys-manager edge function pour chiffrement sécurisé
+          // encrypted_key sera géré côté serveur
         });
       } else {
         // Mise à jour
         final data = {
-          'key_alias': _aliasController.text.trim(),
-          'description': _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
+          'key_name': _aliasController.text.trim(),
+          'notes': _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
         };
-        
+
         if (_keyController.text.trim().isNotEmpty) {
-          data['encrypted_key'] = _keyController.text.trim();
+          // TODO: Utiliser ai-keys-manager pour update sécurisé
+          // data['encrypted_key'] = _keyController.text.trim();
         }
-        
+
         await supabase
-            .from('ai_api_keys')
+            .from('user_api_keys')
             .update(data)
             .eq('id', widget.keyId!);
       }
@@ -266,12 +268,13 @@ class _AddConfigurationDialogState extends ConsumerState<AddConfigurationDialog>
     
     try {
       final supabase = ref.read(supabaseConnectionProvider).client!;
-      
-      await supabase.from('ai_model_configurations').insert({
-        'provider_key': _selectedProvider,
-        'model_key': _selectedModel,
-        'api_key_id': _selectedApiKeyId,
-        'config_name': _configNameController.text.trim(),
+
+      await supabase.from('ai_provider_configs').insert({
+        'provider_name': _selectedProvider,
+        'model_name': _selectedModel,
+        // Note: api_key_id n'existe pas dans ai_provider_configs
+        // Les clés sont gérées séparément via user_api_keys
+        'system_prompt': null,  // Optionnel
         'module_name': _selectedModule,
         'is_active': false,
       });
@@ -516,10 +519,10 @@ class _ApiKeySelector extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(k['key_alias']),
-                if (k['description'] != null)
+                Text(k['key_name']),
+                if (k['notes'] != null)
                   Text(
-                    k['description'],
+                    k['notes'],
                     style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -536,8 +539,8 @@ class _ApiKeySelector extends ConsumerWidget {
   Future<List<Map<String, dynamic>>> _fetchApiKeys(WidgetRef ref) async {
     final supabase = ref.read(supabaseConnectionProvider).client!;
     final response = await supabase
-        .from('ai_api_keys')
-        .select('id, key_alias, description')
+        .from('user_api_keys')
+        .select('id, key_name, notes')
         .eq('provider_key', providerKey)
         .eq('is_active', true);
     return List<Map<String, dynamic>>.from(response);
