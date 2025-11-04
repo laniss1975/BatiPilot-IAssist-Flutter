@@ -73,8 +73,9 @@ BEGIN
     p_system_prompt,
     true
   )
-  ON CONFLICT (user_id, module_name, provider_name, model_name)
+  ON CONFLICT (user_id, module_name, provider_name)
   DO UPDATE SET
+    model_name = EXCLUDED.model_name,
     selected_provider_id = EXCLUDED.selected_provider_id,
     selected_model_id = EXCLUDED.selected_model_id,
     system_prompt = COALESCE(EXCLUDED.system_prompt, ai_provider_configs.system_prompt),
